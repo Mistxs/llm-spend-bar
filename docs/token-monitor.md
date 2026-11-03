@@ -85,6 +85,14 @@ python3 bridge/litellm_bridge.py --loop
 ./scripts/bridge.sh
 ```
 
+Автозапуск через launchd (рекомендуется для постоянного аудита):
+
+```bash
+./scripts/install-bridge-service.sh
+# лог: ~/Library/Logs/LLM Spend Bar/bridge.log
+# снять: ./scripts/install-bridge-service.sh --uninstall
+```
+
 Проверить, что данные дошли:
 
 ```bash

@@ -51,6 +51,7 @@ Bridge нормализует spend logs LiteLLM в формат Token Monitor, 
 cp .bridge.env.example .bridge.env   # вставьте секрет из Token Monitor
 ./scripts/bridge.sh --once           # пробный прогон
 ./scripts/bridge.sh                  # постоянная синхронизация
+./scripts/install-bridge-service.sh  # автозапуск через launchd
 ```
 
 Подробная инструкция: [docs/token-monitor.md](docs/token-monitor.md).
