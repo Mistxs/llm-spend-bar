@@ -1,78 +1,8 @@
 #import <Cocoa/Cocoa.h>
 
-#import "LSBApiClient.h"
 #import "LSBFormat.h"
 #import "LSBMenuBarIcon.h"
 #import "LSBModels+Internal.h"
-#import "LSBSettings.h"
-
-static void LSBPrintPeriod(NSString *title, LSBPeriodStats *stats, double budget) {
-    NSString *budgetText = budget > 0
-        ? [NSString stringWithFormat:@"%@ / %@ (%@)", [LSBFormat usd:stats.spend], [LSBFormat usd:budget], [LSBFormat percent:stats.spend / budget]]
-        : [LSBFormat usd:stats.spend];
-    printf("%-8s %s · %s токенов · %lld запросов · кэш %lld\n",
-           title.UTF8String,
-           budgetText.UTF8String,
-           [LSBFormat tokens:stats.totalTokens].UTF8String,
-           stats.requests,
-           stats.cacheHits);
-}
-
-void LSBProbeRun(void) {
-    @autoreleasepool {
-        [LSBSettings registerDefaults];
-
-        printf("base URL: %s\n", LSBSettings.baseURL.absoluteString.UTF8String ?: "(none)");
-        NSString *key = LSBSettings.masterKey;
-        const char *keySource = getenv("LSB_MASTER_KEY") != NULL ? "set (env)" : "set (Keychain)";
-        printf("master key: %s\n", key.length > 0 ? keySource : "missing");
-        printf("demo: %s\n", LSBSettings.demoMode ? "yes" : "no");
-
-        NSURL *baseURL = LSBSettings.baseURL;
-        if (!baseURL) baseURL = [NSURL URLWithString:@"http://127.0.0.1:4000"];
-        LSBApiClient *client = [[LSBApiClient alloc] initWithBaseURL:baseURL apiKey:key];
-
-        NSError *error = nil;
-        BOOL healthy = [client checkHealthWithError:&error];
-        printf("health: %s\n", healthy ? "ok" : (error.localizedDescription.UTF8String ?: "failed"));
-
-        error = nil;
-        LSBSummary *summary = [client fetchSummaryWithError:&error];
-        if (!summary) {
-            printf("summary: %s\n", error.localizedDescription.UTF8String ?: "failed");
-            return;
-        }
-
-        printf("\nLLM Spend — LiteLLM\n");
-        LSBPrintPeriod(@"Сегодня", summary.today, LSBSettings.dailyBudget);
-        LSBPrintPeriod(@"Неделя", summary.week, LSBSettings.weeklyBudget);
-        LSBPrintPeriod(@"Месяц", summary.month, LSBSettings.monthlyBudget);
-        printf("логов в выборке: %ld%s\n", (long)summary.logCount, summary.truncated ? " (обрезано)" : "");
-
-        if (summary.sessions.count > 0) {
-            printf("\nСессии сегодня:\n");
-            for (LSBSessionSpend *session in summary.sessions) {
-                printf("  %-32s %8s  %8s tok  %3lld запр.  %s\n",
-                       [LSBFormat truncate:session.title width:32].UTF8String,
-                       [LSBFormat usd:session.spend].UTF8String,
-                       [LSBFormat tokens:session.totalTokens].UTF8String,
-                       session.requests,
-                       session.sessionID.UTF8String);
-            }
-        }
-
-        if (summary.today.models.count > 0) {
-            printf("\nМодели сегодня:\n");
-            for (LSBModelSpend *model in summary.today.models) {
-                printf("  %-28s %8s  %8s tok  %3lld запр.\n",
-                       model.model.UTF8String,
-                       [LSBFormat usd:model.spend].UTF8String,
-                       [LSBFormat tokens:model.totalTokens].UTF8String,
-                       model.requests);
-            }
-        }
-    }
-}
 
 void LSBSelfTestRun(NSString *path) {
     @autoreleasepool {

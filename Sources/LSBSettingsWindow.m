@@ -1,28 +1,27 @@
 #import "LSBSettingsWindow.h"
-#import "LSBApiClient.h"
 #import "LSBSettings.h"
 
 @interface LSBSettingsWindowController () <NSWindowDelegate>
-@property (nonatomic, strong) NSTextField *baseURLField;
-@property (nonatomic, strong) NSSecureTextField *keyField;
 @property (nonatomic, strong) NSTextField *dailyField;
 @property (nonatomic, strong) NSTextField *weeklyField;
 @property (nonatomic, strong) NSTextField *monthlyField;
 @property (nonatomic, strong) NSPopUpButton *refreshPopup;
 @property (nonatomic, strong) NSPopUpButton *displayPopup;
-@property (nonatomic, strong) NSTextField *configField;
+@property (nonatomic, strong) NSTextField *claudeField;
+@property (nonatomic, strong) NSTextField *codexField;
+@property (nonatomic, strong) NSTextField *opencodeField;
+@property (nonatomic, strong) NSTextField *pricingField;
 @property (nonatomic, strong) NSTextField *statusLabel;
-@property (nonatomic, strong) NSButton *testButton;
 @end
 
 @implementation LSBSettingsWindowController
 
 - (instancetype)init {
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 600, 430)
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 680, 560)
                                                    styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
-    window.title = @"LLM Spend Bar — настройки";
+    window.title = @"LLM Spend — настройки";
     window.releasedWhenClosed = NO;
     window.delegate = self;
     self = [super initWithWindow:window];
@@ -35,51 +34,26 @@
 - (void)buildInterface {
     NSView *content = self.window.contentView;
 
-    NSTextField *title = [NSTextField labelWithString:@"Подключение к LiteLLM"];
+    NSTextField *title = [NSTextField labelWithString:@"Локальный аудит"];
     title.font = [NSFont systemFontOfSize:15 weight:NSFontWeightSemibold];
 
     NSTextField *hint = [NSTextField wrappingLabelWithString:
-        @"LiteLLM должен быть запущен локально (docker compose up -d). "
-        @"Master key можно взять из .env или из LiteLLM UI."];
+        @"Приложение читает локальные логи агентов и считает токены/стоимость. "
+        @"Тексты диалогов не читаются. Docker и LiteLLM не нужны."];
     hint.font = [NSFont systemFontOfSize:11];
     hint.textColor = [NSColor secondaryLabelColor];
-
-    self.baseURLField = [NSTextField textFieldWithString:LSBSettings.baseURLString];
-    self.baseURLField.placeholderString = @"http://127.0.0.1:4000";
-
-    self.keyField = [NSSecureTextField textFieldWithString:@""];
-    self.keyField.placeholderString = LSBSettings.masterKey.length > 0
-        ? @"ключ сохранён в Keychain — оставьте пустым, чтобы не менять"
-        : @"sk-... (master key LiteLLM)";
-
-    NSButton *clearKey = [NSButton buttonWithTitle:@"Удалить ключ" target:self action:@selector(clearKey:)];
-    clearKey.bezelStyle = NSBezelStyleRounded;
-    clearKey.controlSize = NSControlSizeSmall;
-
-    NSStackView *keyRow = [NSStackView stackViewWithViews:@[self.keyField, clearKey]];
-    keyRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-    keyRow.spacing = 8;
 
     self.dailyField = [NSTextField textFieldWithString:[NSString stringWithFormat:@"%.2f", LSBSettings.dailyBudget]];
     self.weeklyField = [NSTextField textFieldWithString:[NSString stringWithFormat:@"%.2f", LSBSettings.weeklyBudget]];
     self.monthlyField = [NSTextField textFieldWithString:[NSString stringWithFormat:@"%.2f", LSBSettings.monthlyBudget]];
 
     self.refreshPopup = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
-    NSArray<NSString *> *refreshTitles = @[@"15 секунд", @"30 секунд", @"1 минута", @"5 минут"];
-    NSArray<NSNumber *> *refreshValues = @[@15, @30, @60, @300];
+    NSArray<NSString *> *refreshTitles = @[@"30 секунд", @"1 минута", @"5 минут", @"15 минут"];
+    NSArray<NSNumber *> *refreshValues = @[@30, @60, @300, @900];
     for (NSUInteger i = 0; i < refreshTitles.count; i++) {
         [self.refreshPopup addItemWithTitle:refreshTitles[i]];
         self.refreshPopup.lastItem.representedObject = refreshValues[i];
     }
-    NSTimeInterval interval = LSBSettings.refreshInterval;
-    NSInteger selected = 1;
-    for (NSUInteger i = 0; i < refreshValues.count; i++) {
-        if (fabs(refreshValues[i].doubleValue - interval) < 1) {
-            selected = i;
-            break;
-        }
-    }
-    [self.refreshPopup selectItemAtIndex:selected];
 
     self.displayPopup = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
     NSArray<NSString *> *displayTitles = @[@"Три полоски", @"Доллары за сегодня", @"Токены за сегодня"];
@@ -88,23 +62,24 @@
         [self.displayPopup addItemWithTitle:displayTitles[i]];
         self.displayPopup.lastItem.representedObject = displayValues[i];
     }
-    NSUInteger displayIndex = [displayValues indexOfObject:LSBSettings.displayMode];
-    [self.displayPopup selectItemAtIndex:displayIndex == NSNotFound ? 0 : (NSInteger)displayIndex];
 
-    self.configField = [NSTextField textFieldWithString:LSBSettings.configPath];
-    self.configField.placeholderString = @"~/llm-spend-bar/litellm/config.yaml";
+    self.claudeField = [NSTextField textFieldWithString:LSBSettings.claudeProjectsPath];
+    self.codexField = [NSTextField textFieldWithString:LSBSettings.codexSessionsPath];
+    self.opencodeField = [NSTextField textFieldWithString:LSBSettings.opencodeDBPath];
+    self.pricingField = [NSTextField textFieldWithString:LSBSettings.pricingOverridePath];
 
     NSGridView *grid = [NSGridView gridViewWithViews:@[
-        @[[self label:@"LiteLLM URL"], self.baseURLField],
-        @[[self label:@"Master key"], keyRow],
         @[[self label:@"Бюджет на день, $"], self.dailyField],
         @[[self label:@"Бюджет на неделю, $"], self.weeklyField],
         @[[self label:@"Бюджет на месяц, $"], self.monthlyField],
-        @[[self label:@"Обновлять"], self.refreshPopup],
+        @[[self label:@"Сканировать"], self.refreshPopup],
         @[[self label:@"В строке меню"], self.displayPopup],
-        @[[self label:@"Конфиг LiteLLM"], self.configField],
+        @[[self label:@"Claude Code"], self.claudeField],
+        @[[self label:@"Codex"], self.codexField],
+        @[[self label:@"OpenCode DB"], self.opencodeField],
+        @[[self label:@"Свои цены"], self.pricingField],
     ]];
-    grid.rowSpacing = 10;
+    grid.rowSpacing = 9;
     grid.columnSpacing = 14;
     grid.translatesAutoresizingMaskIntoConstraints = NO;
     [grid columnAtIndex:0].xPlacement = NSGridCellPlacementTrailing;
@@ -114,7 +89,8 @@
     self.statusLabel.textColor = [NSColor secondaryLabelColor];
     self.statusLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 
-    self.testButton = [NSButton buttonWithTitle:@"Проверить подключение" target:self action:@selector(testConnection:)];
+    NSButton *scan = [NSButton buttonWithTitle:@"Сканировать сейчас" target:self action:@selector(scanNow:)];
+    NSButton *folder = [NSButton buttonWithTitle:@"Открыть папку данных" target:self action:@selector(openDataFolder:)];
     NSButton *save = [NSButton buttonWithTitle:@"Сохранить" target:self action:@selector(save:)];
     save.keyEquivalent = @"\r";
     NSButton *cancel = [NSButton buttonWithTitle:@"Отмена" target:self action:@selector(cancel:)];
@@ -123,7 +99,7 @@
     NSView *spacer = [NSView new];
     [spacer setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
     [spacer setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
-    NSStackView *buttons = [NSStackView stackViewWithViews:@[self.testButton, spacer, cancel, save]];
+    NSStackView *buttons = [NSStackView stackViewWithViews:@[scan, folder, spacer, cancel, save]];
     buttons.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     buttons.spacing = 8;
     buttons.translatesAutoresizingMaskIntoConstraints = NO;
@@ -133,7 +109,6 @@
     [content addSubview:grid];
     [content addSubview:self.statusLabel];
     [content addSubview:buttons];
-
     title.translatesAutoresizingMaskIntoConstraints = NO;
     hint.translatesAutoresizingMaskIntoConstraints = NO;
     self.statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -141,28 +116,24 @@
     [NSLayoutConstraint activateConstraints:@[
         [title.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:24],
         [title.topAnchor constraintEqualToAnchor:content.topAnchor constant:22],
-
         [hint.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:24],
         [hint.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-24],
         [hint.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:6],
-
         [grid.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:24],
         [grid.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-24],
         [grid.topAnchor constraintEqualToAnchor:hint.bottomAnchor constant:18],
-
         [self.statusLabel.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:24],
         [self.statusLabel.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-24],
-        [self.statusLabel.topAnchor constraintEqualToAnchor:grid.bottomAnchor constant:14],
-
+        [self.statusLabel.topAnchor constraintEqualToAnchor:grid.bottomAnchor constant:12],
         [buttons.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:24],
         [buttons.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-24],
         [buttons.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-20],
         [buttons.topAnchor constraintGreaterThanOrEqualToAnchor:self.statusLabel.bottomAnchor constant:12],
     ]];
-
-    [self.baseURLField.widthAnchor constraintGreaterThanOrEqualToConstant:300].active = YES;
-    [self.keyField.widthAnchor constraintGreaterThanOrEqualToConstant:250].active = YES;
-    [self.configField.widthAnchor constraintGreaterThanOrEqualToConstant:300].active = YES;
+    [self.claudeField.widthAnchor constraintGreaterThanOrEqualToConstant:400].active = YES;
+    [self.codexField.widthAnchor constraintGreaterThanOrEqualToConstant:400].active = YES;
+    [self.opencodeField.widthAnchor constraintGreaterThanOrEqualToConstant:400].active = YES;
+    [self.pricingField.widthAnchor constraintGreaterThanOrEqualToConstant:400].active = YES;
 }
 
 - (NSTextField *)label:(NSString *)text {
@@ -173,18 +144,16 @@
 }
 
 - (void)showSettings {
-    self.baseURLField.stringValue = LSBSettings.baseURLString;
-    self.keyField.stringValue = @"";
-    self.keyField.placeholderString = LSBSettings.masterKey.length > 0
-        ? @"ключ сохранён в Keychain — оставьте пустым, чтобы не менять"
-        : @"sk-... (master key LiteLLM)";
     self.dailyField.stringValue = [NSString stringWithFormat:@"%.2f", LSBSettings.dailyBudget];
     self.weeklyField.stringValue = [NSString stringWithFormat:@"%.2f", LSBSettings.weeklyBudget];
     self.monthlyField.stringValue = [NSString stringWithFormat:@"%.2f", LSBSettings.monthlyBudget];
-    self.configField.stringValue = LSBSettings.configPath;
+    self.claudeField.stringValue = LSBSettings.claudeProjectsPath;
+    self.codexField.stringValue = LSBSettings.codexSessionsPath;
+    self.opencodeField.stringValue = LSBSettings.opencodeDBPath;
+    self.pricingField.stringValue = LSBSettings.pricingOverridePath;
     self.statusLabel.stringValue = @"";
 
-    NSTimeInterval interval = LSBSettings.refreshInterval;
+    NSTimeInterval interval = LSBSettings.scanInterval;
     for (NSMenuItem *item in self.refreshPopup.itemArray) {
         NSNumber *value = item.representedObject;
         if (value && fabs(value.doubleValue - interval) < 1) {
@@ -200,94 +169,60 @@
         }
     }
 
-    [self.window center];
+    NSScreen *screen = [NSScreen mainScreen];
+    NSRect visible = screen.visibleFrame;
+    NSRect frame = self.window.frame;
+    frame.origin.x = visible.origin.x + (visible.size.width - frame.size.width) / 2.0;
+    frame.origin.y = visible.origin.y + (visible.size.height - frame.size.height) / 2.0;
+    [self.window setFrame:frame display:YES];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     [NSApp activateIgnoringOtherApps:YES];
     [self.window makeKeyAndOrderFront:nil];
+    [self.window orderFrontRegardless];
 }
 
-- (void)clearKey:(id)sender {
-    [LSBSettings deleteMasterKey];
-    self.keyField.stringValue = @"";
-    self.keyField.placeholderString = @"ключ удалён";
-    self.statusLabel.stringValue = @"Master key удалён из Keychain.";
-    self.statusLabel.textColor = [NSColor systemOrangeColor];
-}
-
-- (void)testConnection:(id)sender {
-    NSString *raw = [self.baseURLField.stringValue stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (raw.length == 0) raw = @"http://127.0.0.1:4000";
-    if (![raw hasPrefix:@"http://"] && ![raw hasPrefix:@"https://"]) raw = [@"http://" stringByAppendingString:raw];
-    NSURL *url = [NSURL URLWithString:raw];
-    NSString *key = self.keyField.stringValue;
-    if (key.length == 0) key = LSBSettings.masterKey;
-
-    self.testButton.enabled = NO;
-    self.statusLabel.stringValue = @"Проверяю…";
+- (void)scanNow:(id)sender {
+    [self saveSettingsWithoutClosing];
+    self.statusLabel.stringValue = @"Сканирование запущено…";
     self.statusLabel.textColor = [NSColor secondaryLabelColor];
-
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        LSBApiClient *client = [[LSBApiClient alloc] initWithBaseURL:url apiKey:key];
-        NSError *error = nil;
-        BOOL healthy = [client checkHealthWithError:&error];
-        LSBSummary *summary = nil;
-        if (healthy && key.length > 0) {
-            summary = [client fetchSummaryWithError:&error];
-        }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.testButton.enabled = YES;
-            if (healthy && !error) {
-                NSString *extra = summary
-                    ? [NSString stringWithFormat:@" · запросов в выборке: %ld", (long)summary.logCount]
-                    : @"";
-                self.statusLabel.stringValue = [@"LiteLLM отвечает" stringByAppendingString:extra];
-                self.statusLabel.textColor = [NSColor systemGreenColor];
-            } else if (healthy && error) {
-                self.statusLabel.stringValue = [NSString stringWithFormat:@"LiteLLM отвечает, но ключ не принят: %@", error.localizedDescription];
-                self.statusLabel.textColor = [NSColor systemOrangeColor];
-            } else {
-                self.statusLabel.stringValue = error.localizedDescription ?: @"Не удалось подключиться";
-                self.statusLabel.textColor = [NSColor systemRedColor];
-            }
-        });
-    });
+    [self.delegate settingsDidChange];
 }
 
-- (void)save:(id)sender {
-    NSString *raw = [self.baseURLField.stringValue stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (raw.length == 0) raw = @"http://127.0.0.1:4000";
-    if (![raw hasPrefix:@"http://"] && ![raw hasPrefix:@"https://"]) raw = [@"http://" stringByAppendingString:raw];
-    while ([raw hasSuffix:@"/"]) raw = [raw substringToIndex:raw.length - 1];
-    [LSBSettings setBaseURLString:raw];
+- (void)openDataFolder:(id)sender {
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:LSBSettings.dataDirectory]];
+}
 
-    NSString *key = self.keyField.stringValue;
-    if (key.length > 0) {
-        NSError *error = nil;
-        if (![LSBSettings setMasterKey:key error:&error]) {
-            self.statusLabel.stringValue = error.localizedDescription ?: @"Не удалось сохранить ключ";
-            self.statusLabel.textColor = [NSColor systemRedColor];
-            return;
-        }
-    }
-
+- (void)saveSettingsWithoutClosing {
     [LSBSettings setDailyBudget:MAX(0, self.dailyField.doubleValue)];
     [LSBSettings setWeeklyBudget:MAX(0, self.weeklyField.doubleValue)];
     [LSBSettings setMonthlyBudget:MAX(0, self.monthlyField.doubleValue)];
-
     NSNumber *refresh = self.refreshPopup.selectedItem.representedObject;
-    if (refresh) [LSBSettings setRefreshInterval:refresh.doubleValue];
-
+    if (refresh) [LSBSettings setScanInterval:refresh.doubleValue];
     NSString *display = self.displayPopup.selectedItem.representedObject;
     if (display) [LSBSettings setDisplayMode:display];
 
-    NSString *config = [self.configField.stringValue stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (config.length > 0) [LSBSettings setConfigPath:[config stringByExpandingTildeInPath]];
+    NSString *claude = [self.claudeField.stringValue stringByExpandingTildeInPath];
+    NSString *codex = [self.codexField.stringValue stringByExpandingTildeInPath];
+    NSString *opencode = [self.opencodeField.stringValue stringByExpandingTildeInPath];
+    NSString *pricing = [self.pricingField.stringValue stringByExpandingTildeInPath];
+    if (claude.length > 0) [LSBSettings setClaudeProjectsPath:claude];
+    if (codex.length > 0) [LSBSettings setCodexSessionsPath:codex];
+    if (opencode.length > 0) [LSBSettings setOpencodeDBPath:opencode];
+    if (pricing.length > 0) [LSBSettings setPricingOverridePath:pricing];
+}
 
+- (void)save:(id)sender {
+    [self saveSettingsWithoutClosing];
     [self.delegate settingsDidChange];
     [self.window close];
 }
 
 - (void)cancel:(id)sender {
     [self.window close];
+}
+
+- (void)windowWillClose:(NSNotification *)notification {
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 }
 
 @end

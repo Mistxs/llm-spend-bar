@@ -1,14 +1,18 @@
 #import "LSBAppDelegate.h"
 #import <ServiceManagement/ServiceManagement.h>
 
-#import "LSBApiClient.h"
+#import "LSBCollector.h"
+#import "LSBDashboardWindowController.h"
 #import "LSBFormat.h"
 #import "LSBMenuBarIcon.h"
 #import "LSBModels.h"
 #import "LSBSettings.h"
 #import "LSBSettingsWindow.h"
+#import "LSBStore.h"
 
-@interface LSBAppDelegate () <LSBSettingsWindowDelegate>
+@interface LSBAppDelegate () <LSBSettingsWindowDelegate, LSBDashboardDelegate>
+@property (nonatomic, strong) LSBStore *store;
+@property (nonatomic, strong) LSBCollector *collector;
 @end
 
 @implementation LSBAppDelegate {
@@ -21,16 +25,21 @@
     BOOL _healthy;
     BOOL _menuOpen;
     LSBSettingsWindowController *_settingsWindow;
+    LSBDashboardWindowController *_dashboard;
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
     [LSBSettings registerDefaults];
 
+    NSError *error = nil;
+    _store = [[LSBStore alloc] initWithDirectory:LSBSettings.dataDirectory];
+    if (![_store open:&error]) {
+        _lastError = error.localizedDescription ?: @"Не удалось открыть локальную базу";
+    }
+    _collector = [[LSBCollector alloc] initWithStore:_store];
+
     _statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
     _statusItem.behavior = NSStatusItemBehaviorRemovalAllowed;
-
-    _settingsWindow = [LSBSettingsWindowController new];
-    _settingsWindow.delegate = self;
 
     [self rebuildMenu];
     [self updateButton];
@@ -42,38 +51,40 @@
                                                             object:nil];
 
     __weak typeof(self) weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [weakSelf refreshForced:YES];
         if (getenv("LSB_OPEN_SETTINGS") != NULL) {
             [weakSelf openSettings:nil];
+        }
+        if (getenv("LSB_OPEN_DASHBOARD") != NULL) {
+            [weakSelf openDashboard:nil];
         }
     });
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
     [_timer invalidate];
+    [_store close];
     [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:self];
 }
 
 - (void)dumpMenuToStandardOutput {
     [LSBSettings registerDefaults];
-    _statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
-
-    LSBApiClient *client = [self currentClient];
+    _store = [[LSBStore alloc] initWithDirectory:LSBSettings.dataDirectory];
     NSError *error = nil;
-    _healthy = [client checkHealthWithError:&error];
-    _summary = [client fetchSummaryWithError:&error];
-    _lastError = _summary ? nil : (error.localizedDescription ?: @"нет данных");
+    [_store open:&error];
+    _collector = [[LSBCollector alloc] initWithStore:_store];
+    [_collector scanWithError:&error];
+    _summary = [_store summaryAt:[NSDate date]];
+    _lastError = error.localizedDescription;
     _lastUpdated = [NSDate date];
+    _statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
 
     [self updateButton];
     [self rebuildMenu];
 
-    printf("menu bar title: %s\n",
-           (_statusItem.button.attributedTitle.string ?: @"").UTF8String);
-    printf("menu bar tooltip:\n%s\n\n",
-           (_statusItem.button.toolTip ?: @"").UTF8String);
-
+    printf("menu bar title: %s\n", (_statusItem.button.attributedTitle.string ?: @"").UTF8String);
+    printf("menu bar tooltip:\n%s\n\n", (_statusItem.button.toolTip ?: @"").UTF8String);
     [self dumpMenu:_statusItem.menu indent:0];
 }
 
@@ -89,9 +100,7 @@
                item.enabled ? "" : "[disabled] ",
                title.UTF8String,
                item.state == NSControlStateValueOn ? "  ✓" : "");
-        if (item.submenu) {
-            [self dumpMenu:item.submenu indent:indent + 1];
-        }
+        if (item.submenu) [self dumpMenu:item.submenu indent:indent + 1];
     }
 }
 
@@ -101,67 +110,58 @@
 
 #pragma mark - Loading
 
-- (LSBApiClient *)currentClient {
-    NSURL *baseURL = LSBSettings.baseURL;
-    if (!baseURL) baseURL = [NSURL URLWithString:@"http://127.0.0.1:4000"];
-    return [[LSBApiClient alloc] initWithBaseURL:baseURL apiKey:LSBSettings.masterKey];
-}
-
 - (void)refreshNow:(id)sender {
     [self refreshForced:YES];
 }
 
 - (void)refreshForced:(BOOL)force {
-    if (_refreshing) return;
-    if (!force && _lastUpdated && [[NSDate date] timeIntervalSinceDate:_lastUpdated] < 5) return;
-
-    if (!LSBSettings.demoMode && LSBSettings.masterKey.length == 0) {
-        _lastError = @"LiteLLM не настроен: укажите master key в «Настройках…».";
-        _summary = nil;
-        [self updateButton];
-        if (!_menuOpen) [self rebuildMenu];
-        return;
-    }
+    if (_refreshing || !_store) return;
+    if (!force && _lastUpdated && [[NSDate date] timeIntervalSinceDate:_lastUpdated] < 3) return;
 
     _refreshing = YES;
     [self updateButton];
 
-    LSBApiClient *client = [self currentClient];
     __weak typeof(self) weakSelf = self;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
         NSError *error = nil;
-        BOOL healthy = [client checkHealthWithError:&error];
-        LSBSummary *summary = [client fetchSummaryWithError:&error];
+        LSBScanResult *result = [weakSelf.collector scanWithError:&error];
+        LSBSummary *summary = [weakSelf.store summaryAt:[NSDate date]];
         dispatch_async(dispatch_get_main_queue(), ^{
-            [weakSelf applySummary:summary healthy:healthy error:error];
+            [weakSelf applySummary:summary error:error warnings:result.warnings];
         });
     });
 }
 
-- (void)applySummary:(LSBSummary *)summary healthy:(BOOL)healthy error:(NSError *)error {
+- (void)applySummary:(LSBSummary *)summary error:(NSError *)error warnings:(NSArray<NSString *> *)warnings {
     _refreshing = NO;
-    _healthy = healthy || summary != nil;
-
+    _healthy = error == nil;
     if (summary) {
         _summary = summary;
         _lastUpdated = [NSDate date];
-        _lastError = nil;
+        _lastError = error.localizedDescription;
+        if (_lastError.length == 0 && warnings.count > 0) {
+            _lastError = warnings.firstObject;
+        }
     } else {
-        _lastError = error.localizedDescription ?: @"Неизвестная ошибка";
+        _lastError = error.localizedDescription ?: @"Сканирование не удалось";
     }
 
     [self updateButton];
     if (!_menuOpen) [self rebuildMenu];
+    if (_dashboard && _dashboard.window.isVisible) {
+        NSString *period = _dashboard.currentPeriod ?: @"month";
+        [_dashboard updateWithSnapshot:[self.store dashboardSnapshotForPeriod:period now:[NSDate date]]];
+    }
 }
 
 - (void)scheduleTimer {
     [_timer invalidate];
-    NSTimeInterval interval = LSBSettings.refreshInterval;
+    NSTimeInterval interval = LSBSettings.scanInterval;
     __weak typeof(self) weakSelf = self;
     NSTimer *timer = [NSTimer timerWithTimeInterval:interval
                                             repeats:YES
-                                              block:^(NSTimer * _Nonnull timer) {
-        (void)timer;
+                                              block:^(NSTimer * _Nonnull current) {
+        (void)current;
         [weakSelf refreshForced:NO];
     }];
     timer.tolerance = MIN(10, interval * 0.1);
@@ -199,7 +199,7 @@
                 @([self fractionForSpend:_summary.week.spend budget:LSBSettings.weeklyBudget]),
                 @([self fractionForSpend:_summary.month.spend budget:LSBSettings.monthlyBudget]),
             ];
-            button.image = [LSBMenuBarIcon imageWithFractions:fractions error:_lastError != nil];
+            button.image = [LSBMenuBarIcon imageWithFractions:fractions error:_lastError.length > 0];
             button.imagePosition = NSImageOnly;
             button.attributedTitle = [[NSAttributedString alloc] initWithString:@""];
         }
@@ -208,14 +208,13 @@
         button.image = [LSBMenuBarIcon imageWithFractions:@[] error:NO];
         button.imagePosition = NSImageOnly;
         button.attributedTitle = [[NSAttributedString alloc] initWithString:@""];
-        button.toolTip = @"Загружаю расходы из LiteLLM…";
+        button.toolTip = @"Сканирую локальные логи…";
     } else {
         button.image = nil;
         button.imagePosition = NSNoImage;
         button.attributedTitle = [self textTitle:@"LLM ?" color:[NSColor systemOrangeColor]];
-        button.toolTip = _lastError ?: @"Нет данных LiteLLM";
+        button.toolTip = _lastError ?: @"Нет данных";
     }
-
     button.accessibilityLabel = button.toolTip ?: @"LLM Spend Bar";
 }
 
@@ -229,9 +228,8 @@
 
 - (NSString *)tooltipText {
     if (!_summary) return _lastError ?: @"LLM Spend Bar";
-
     NSMutableArray<NSString *> *lines = [NSMutableArray array];
-    [lines addObject:@"LLM Spend · LiteLLM"];
+    [lines addObject:@"LLM Spend · локальные логи"];
     [lines addObject:[NSString stringWithFormat:@"Сегодня: %@ · %@ токенов · %@",
                       [self spendDescription:_summary.today.spend budget:LSBSettings.dailyBudget],
                       [LSBFormat tokens:_summary.today.totalTokens],
@@ -244,10 +242,7 @@
                       [self spendDescription:_summary.month.spend budget:LSBSettings.monthlyBudget],
                       [LSBFormat tokens:_summary.month.totalTokens],
                       [LSBFormat requests:_summary.month.requests]]];
-    [lines addObject:[NSString stringWithFormat:@"LiteLLM: %@", _healthy ? @"работает" : @"недоступен"]];
-    if (_summary.truncated) {
-        [lines addObject:@"⚠︎ выборка обрезана: больше 10 000 записей за период"];
-    }
+    [lines addObject:[NSString stringWithFormat:@"Событий в базе: %ld", (long)_summary.logCount]];
     if (_lastError) [lines addObject:[@"⚠︎ " stringByAppendingString:_lastError]];
     [lines addObject:[LSBFormat updated:_lastUpdated]];
     return [lines componentsJoinedByString:@"\n"];
@@ -270,27 +265,20 @@
 
     [menu addItem:[self headerItem]];
 
-    if (!_summary && LSBSettings.masterKey.length == 0 && !LSBSettings.demoMode) {
-        [menu addItem:[NSMenuItem separatorItem]];
-        [menu addItem:[self infoItem:@"LiteLLM не настроен"]];
-        NSMenuItem *setup = [self actionItem:@"Настроить LiteLLM…" action:@selector(openSettings:) key:@","];
-        setup.image = [NSImage imageWithSystemSymbolName:@"gearshape" accessibilityDescription:nil];
-        [menu addItem:setup];
-        [menu addItem:[NSMenuItem separatorItem]];
-        [menu addItem:[self actionItem:@"Выйти" action:@selector(quit:) key:@"q"]];
-        _statusItem.menu = menu;
-        return;
-    }
-
     if (_summary) {
         [menu addItem:[NSMenuItem separatorItem]];
         [menu addItem:[self periodItem:@"Сегодня" stats:_summary.today budget:LSBSettings.dailyBudget]];
         [menu addItem:[self periodItem:@"Неделя" stats:_summary.week budget:LSBSettings.weeklyBudget]];
         [menu addItem:[self periodItem:@"Месяц" stats:_summary.month budget:LSBSettings.monthlyBudget]];
+        NSString *warning = [self budgetWarning];
+        if (warning.length > 0) {
+            [menu addItem:[NSMenuItem separatorItem]];
+            [menu addItem:[self errorItem:warning]];
+        }
     } else if (_refreshing) {
-        [menu addItem:[self infoItem:@"Загружаю расходы…"]];
+        [menu addItem:[self infoItem:@"Сканирую локальные логи…"]];
     } else {
-        [menu addItem:[self infoItem:@"Нет данных о расходах"]];
+        [menu addItem:[self infoItem:@"Нет данных"]];
     }
 
     [menu addItem:[NSMenuItem separatorItem]];
@@ -300,19 +288,24 @@
     sessions.submenu = [self sessionsMenu];
     [menu addItem:sessions];
 
+    NSMenuItem *tools = [[NSMenuItem alloc] initWithTitle:@"Инструменты сегодня" action:nil keyEquivalent:@""];
+    tools.image = [NSImage imageWithSystemSymbolName:@"hammer" accessibilityDescription:nil];
+    tools.submenu = [self groupsMenu:@"Инструменты" groups:_summary.tools];
+    [menu addItem:tools];
+
     NSMenuItem *models = [[NSMenuItem alloc] initWithTitle:@"Модели сегодня" action:nil keyEquivalent:@""];
     models.image = [NSImage imageWithSystemSymbolName:@"cpu" accessibilityDescription:nil];
     models.submenu = [self modelsMenu];
     [menu addItem:models];
 
+    NSMenuItem *projects = [[NSMenuItem alloc] initWithTitle:@"Проекты сегодня" action:nil keyEquivalent:@""];
+    projects.image = [NSImage imageWithSystemSymbolName:@"folder" accessibilityDescription:nil];
+    projects.submenu = [self groupsMenu:@"Проекты" groups:_summary.projects];
+    [menu addItem:projects];
+
     [menu addItem:[NSMenuItem separatorItem]];
     [menu addItem:[self statusItem]];
     [menu addItem:[self infoItem:[LSBFormat updated:_lastUpdated]]];
-
-    if (_summary.truncated) {
-        [menu addItem:[NSMenuItem separatorItem]];
-        [menu addItem:[self errorItem:@"Выборка обрезана: больше 10 000 записей за период"]];
-    }
 
     if (_lastError.length > 0) {
         [menu addItem:[NSMenuItem separatorItem]];
@@ -321,26 +314,22 @@
 
     [menu addItem:[NSMenuItem separatorItem]];
 
-    NSMenuItem *refresh = [self actionItem:@"Обновить" action:@selector(refreshNow:) key:@"r"];
-    refresh.image = [NSImage imageWithSystemSymbolName:@"arrow.clockwise" accessibilityDescription:nil];
-    refresh.enabled = !_refreshing;
-    [menu addItem:refresh];
+    NSMenuItem *dashboard = [self actionItem:@"Открыть дашборд…" action:@selector(openDashboard:) key:@"d"];
+    dashboard.image = [NSImage imageWithSystemSymbolName:@"chart.bar.xaxis" accessibilityDescription:nil];
+    [menu addItem:dashboard];
 
-    NSMenuItem *ui = [self actionItem:@"Открыть LiteLLM UI" action:@selector(openLiteLLMUI:) key:@"o"];
-    ui.image = [NSImage imageWithSystemSymbolName:@"safari" accessibilityDescription:nil];
-    [menu addItem:ui];
-
-    NSMenuItem *config = [self actionItem:@"Открыть конфиг LiteLLM" action:@selector(openConfig:) key:@""];
-    config.image = [NSImage imageWithSystemSymbolName:@"doc.text" accessibilityDescription:nil];
-    [menu addItem:config];
-
-    NSMenuItem *folder = [self actionItem:@"Открыть папку проекта" action:@selector(openProjectFolder:) key:@""];
-    folder.image = [NSImage imageWithSystemSymbolName:@"folder" accessibilityDescription:nil];
-    [menu addItem:folder];
+    NSMenuItem *scan = [self actionItem:@"Сканировать сейчас" action:@selector(refreshNow:) key:@"r"];
+    scan.image = [NSImage imageWithSystemSymbolName:@"arrow.clockwise" accessibilityDescription:nil];
+    scan.enabled = !_refreshing;
+    [menu addItem:scan];
 
     NSMenuItem *settings = [self actionItem:@"Настройки…" action:@selector(openSettings:) key:@","];
     settings.image = [NSImage imageWithSystemSymbolName:@"gearshape" accessibilityDescription:nil];
     [menu addItem:settings];
+
+    NSMenuItem *data = [self actionItem:@"Открыть папку данных" action:@selector(openDataFolder:) key:@""];
+    data.image = [NSImage imageWithSystemSymbolName:@"externaldrive" accessibilityDescription:nil];
+    [menu addItem:data];
 
     [menu addItem:[NSMenuItem separatorItem]];
 
@@ -360,7 +349,6 @@
     [menu addItem:login];
 
     [menu addItem:[NSMenuItem separatorItem]];
-
     NSMenuItem *quit = [self actionItem:@"Выйти" action:@selector(quit:) key:@"q"];
     quit.image = [NSImage imageWithSystemSymbolName:@"xmark.circle" accessibilityDescription:nil];
     [menu addItem:quit];
@@ -376,24 +364,29 @@
                 NSForegroundColorAttributeName: [NSColor labelColor],
             }];
     [text appendAttributedString:[[NSAttributedString alloc]
-        initWithString:@"  ·  LiteLLM"
+        initWithString:@"  ·  локальные логи"
             attributes:@{
                 NSFontAttributeName: [NSFont systemFontOfSize:12 weight:NSFontWeightRegular],
                 NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
             }]];
-    if (_summary.demo) {
-        [text appendAttributedString:[[NSAttributedString alloc]
-            initWithString:@"  ·  DEMO"
-                attributes:@{
-                    NSFontAttributeName: [NSFont systemFontOfSize:11 weight:NSFontWeightSemibold],
-                    NSForegroundColorAttributeName: [NSColor systemOrangeColor],
-                }]];
-    }
-
     NSMenuItem *item = [[NSMenuItem alloc] init];
     item.attributedTitle = text;
     item.enabled = NO;
     return item;
+}
+
+- (NSString *)budgetWarning {
+    if (!_summary) return nil;
+    if (LSBSettings.dailyBudget > 0 && _summary.today.spend > LSBSettings.dailyBudget) {
+        return [NSString stringWithFormat:@"Дневной бюджет превышен на %@", [LSBFormat usd:_summary.today.spend - LSBSettings.dailyBudget]];
+    }
+    if (LSBSettings.weeklyBudget > 0 && _summary.week.spend > LSBSettings.weeklyBudget) {
+        return [NSString stringWithFormat:@"Недельный бюджет превышен на %@", [LSBFormat usd:_summary.week.spend - LSBSettings.weeklyBudget]];
+    }
+    if (LSBSettings.monthlyBudget > 0 && _summary.month.spend > LSBSettings.monthlyBudget) {
+        return [NSString stringWithFormat:@"Месячный бюджет превышен на %@", [LSBFormat usd:_summary.month.spend - LSBSettings.monthlyBudget]];
+    }
+    return nil;
 }
 
 - (NSMenuItem *)periodItem:(NSString *)title stats:(LSBPeriodStats *)stats budget:(double)budget {
@@ -426,7 +419,6 @@
             initWithString:[NSString stringWithFormat:@"  %@", [LSBFormat usd:stats.spend]]
                 attributes:@{NSFontAttributeName: mono, NSForegroundColorAttributeName: [NSColor labelColor]}]];
     }
-
     [line appendAttributedString:[[NSAttributedString alloc]
         initWithString:[NSString stringWithFormat:@"  %@ tok", [LSBFormat tokens:stats.totalTokens]]
             attributes:@{
@@ -436,12 +428,11 @@
 
     NSMenuItem *item = [[NSMenuItem alloc] init];
     item.attributedTitle = line;
-    item.toolTip = [NSString stringWithFormat:@"%@: %@, %@ токенов, %@, кэш-хитов: %lld",
+    item.toolTip = [NSString stringWithFormat:@"%@: %@, %@ токенов, %@",
                     title,
                     [self spendDescription:stats.spend budget:budget],
                     [LSBFormat tokens:stats.totalTokens],
-                    [LSBFormat requests:stats.requests],
-                    stats.cacheHits];
+                    [LSBFormat requests:stats.requests]];
     item.enabled = NO;
     return item;
 }
@@ -449,21 +440,17 @@
 - (NSMenu *)sessionsMenu {
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Сессии сегодня"];
     menu.autoenablesItems = NO;
-
     if (_summary.sessions.count == 0) {
         [menu addItem:[self infoItem:@"Нет запросов сегодня"]];
         return menu;
     }
-
     NSInteger limit = MIN((NSInteger)_summary.sessions.count, 12);
     for (NSInteger index = 0; index < limit; index++) {
-        LSBSessionSpend *session = _summary.sessions[(NSUInteger)index];
-        [menu addItem:[self sessionItem:session]];
+        [menu addItem:[self sessionItem:_summary.sessions[(NSUInteger)index]]];
     }
-
     [menu addItem:[NSMenuItem separatorItem]];
-    NSMenuItem *all = [self actionItem:@"Открыть LiteLLM UI" action:@selector(openLiteLLMUI:) key:@""];
-    all.image = [NSImage imageWithSystemSymbolName:@"safari" accessibilityDescription:nil];
+    NSMenuItem *all = [self actionItem:@"Открыть дашборд…" action:@selector(openDashboard:) key:@""];
+    all.image = [NSImage imageWithSystemSymbolName:@"chart.bar.xaxis" accessibilityDescription:nil];
     [menu addItem:all];
     return menu;
 }
@@ -472,12 +459,11 @@
     NSFont *titleFont = [NSFont systemFontOfSize:12 weight:NSFontWeightRegular];
     NSFont *mono = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightMedium];
     NSMutableAttributedString *line = [[NSMutableAttributedString alloc] init];
-
     [line appendAttributedString:[[NSAttributedString alloc]
-        initWithString:[LSBFormat truncate:session.title width:24]
+        initWithString:[LSBFormat truncate:session.title width:26]
             attributes:@{NSFontAttributeName: titleFont, NSForegroundColorAttributeName: [NSColor labelColor]}]];
     [line appendAttributedString:[[NSAttributedString alloc]
-        initWithString:[NSString stringWithFormat:@" %@", [LSBFormat shortSession:session.sessionID]]
+        initWithString:[NSString stringWithFormat:@"  %@", session.tool]
             attributes:@{
                 NSFontAttributeName: [NSFont monospacedSystemFontOfSize:10 weight:NSFontWeightRegular],
                 NSForegroundColorAttributeName: [NSColor tertiaryLabelColor],
@@ -493,14 +479,12 @@
                 NSFontAttributeName: [NSFont monospacedSystemFontOfSize:10 weight:NSFontWeightRegular],
                 NSForegroundColorAttributeName: [NSColor tertiaryLabelColor],
             }]];
-
     NSMenuItem *item = [[NSMenuItem alloc] init];
     item.attributedTitle = line;
-    item.toolTip = [NSString stringWithFormat:@"%@\nID: %@\nМодели: %@\nНачало: %@\nАктивность: %@",
+    item.toolTip = [NSString stringWithFormat:@"%@\nID: %@\nМодель: %@\nАктивность: %@",
                     session.title,
                     session.sessionID,
-                    [session.models componentsJoinedByString:@", "],
-                    [NSDateFormatter localizedStringFromDate:session.startedAt dateStyle:NSDateFormatterNoStyle timeStyle:NSDateFormatterShortStyle],
+                    session.primaryModel,
                     [LSBFormat relative:session.lastActivity]];
     item.target = self;
     item.action = @selector(openSession:);
@@ -512,19 +496,17 @@
 - (NSMenu *)modelsMenu {
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Модели сегодня"];
     menu.autoenablesItems = NO;
-
     NSArray<LSBModelSpend *> *models = _summary.today.models;
     if (models.count == 0) {
         [menu addItem:[self infoItem:@"Нет данных"]];
         return menu;
     }
-
     NSInteger limit = MIN((NSInteger)models.count, 10);
     for (NSInteger index = 0; index < limit; index++) {
         LSBModelSpend *model = models[(NSUInteger)index];
         NSMutableAttributedString *line = [[NSMutableAttributedString alloc] init];
         [line appendAttributedString:[[NSAttributedString alloc]
-            initWithString:[LSBFormat pad:[LSBFormat truncate:model.model width:28] width:28]
+            initWithString:[LSBFormat pad:[LSBFormat truncate:model.model width:30] width:30]
                 attributes:@{
                     NSFontAttributeName: [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular],
                     NSForegroundColorAttributeName: [NSColor labelColor],
@@ -551,6 +533,45 @@
     return menu;
 }
 
+- (NSMenu *)groupsMenu:(NSString *)title groups:(NSArray<LSBGroupSpend *> *)groups {
+    NSMenu *menu = [[NSMenu alloc] initWithTitle:title];
+    menu.autoenablesItems = NO;
+    if (groups.count == 0) {
+        [menu addItem:[self infoItem:@"Нет данных"]];
+        return menu;
+    }
+    NSInteger limit = MIN((NSInteger)groups.count, 10);
+    for (NSInteger index = 0; index < limit; index++) {
+        LSBGroupSpend *group = groups[(NSUInteger)index];
+        NSMutableAttributedString *line = [[NSMutableAttributedString alloc] init];
+        [line appendAttributedString:[[NSAttributedString alloc]
+            initWithString:[LSBFormat pad:[LSBFormat truncate:group.name width:30] width:30]
+                attributes:@{
+                    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular],
+                    NSForegroundColorAttributeName: [NSColor labelColor],
+                }]];
+        [line appendAttributedString:[[NSAttributedString alloc]
+            initWithString:[NSString stringWithFormat:@"  %@", [LSBFormat usd:group.spend]]
+                attributes:@{
+                    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightMedium],
+                    NSForegroundColorAttributeName: [NSColor labelColor],
+                }]];
+        [line appendAttributedString:[[NSAttributedString alloc]
+            initWithString:[NSString stringWithFormat:@"  %@ tok  %@",
+                            [LSBFormat tokens:group.tokens],
+                            [LSBFormat requests:group.requests]]
+                attributes:@{
+                    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:10 weight:NSFontWeightRegular],
+                    NSForegroundColorAttributeName: [NSColor tertiaryLabelColor],
+                }]];
+        NSMenuItem *item = [[NSMenuItem alloc] init];
+        item.attributedTitle = line;
+        item.enabled = NO;
+        [menu addItem:item];
+    }
+    return menu;
+}
+
 - (NSMenuItem *)statusItem {
     NSMutableAttributedString *text = [[NSMutableAttributedString alloc] init];
     [text appendAttributedString:[[NSAttributedString alloc]
@@ -559,9 +580,8 @@
                 NSFontAttributeName: [NSFont systemFontOfSize:11 weight:NSFontWeightBold],
                 NSForegroundColorAttributeName: _healthy ? [NSColor systemGreenColor] : [NSColor systemRedColor],
             }]];
-    NSString *host = LSBSettings.baseURL.absoluteString ?: @"demo";
     [text appendAttributedString:[[NSAttributedString alloc]
-        initWithString:[NSString stringWithFormat:@"LiteLLM  %@", host]
+        initWithString:[NSString stringWithFormat:@"Локальные логи · %ld событий", (long)(_summary ? _summary.logCount : 0)]
             attributes:@{
                 NSFontAttributeName: [NSFont systemFontOfSize:11 weight:NSFontWeightRegular],
                 NSForegroundColorAttributeName: [NSColor secondaryLabelColor],
@@ -609,7 +629,6 @@
     NSArray<NSString *> *titles = @[@"Три полоски", @"Доллары за сегодня", @"Токены за сегодня"];
     NSArray<NSString *> *values = @[LSBDisplayModeBars, LSBDisplayModeDollars, LSBDisplayModeTokens];
     NSString *current = LSBSettings.displayMode;
-
     for (NSInteger index = 0; index < (NSInteger)titles.count; index++) {
         NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:titles[(NSUInteger)index]
                                                       action:@selector(selectMode:)
@@ -626,10 +645,9 @@
 - (NSMenu *)intervalMenu {
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Обновлять"];
     menu.autoenablesItems = NO;
-    NSArray<NSString *> *titles = @[@"15 секунд", @"30 секунд", @"1 минуту", @"5 минут"];
-    NSArray<NSNumber *> *values = @[@15, @30, @60, @300];
-    NSTimeInterval current = LSBSettings.refreshInterval;
-
+    NSArray<NSString *> *titles = @[@"30 секунд", @"1 минуту", @"5 минут"];
+    NSArray<NSNumber *> *values = @[@30, @60, @300];
+    NSTimeInterval current = LSBSettings.scanInterval;
     for (NSInteger index = 0; index < (NSInteger)titles.count; index++) {
         NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:titles[(NSUInteger)index]
                                                       action:@selector(selectInterval:)
@@ -666,43 +684,26 @@
         [pasteboard clearContents];
         [pasteboard setString:sessionID forType:NSPasteboardTypeString];
     }
-    [self openLiteLLMUI:sender];
+    [self openDashboard:sender];
 }
 
-- (void)openLiteLLMUI:(id)sender {
-    NSURL *base = LSBSettings.baseURL;
-    if (!base || [[base scheme] isEqualToString:@"demo"]) {
-        NSBeep();
-        return;
+- (void)openDashboard:(id)sender {
+    if (!_dashboard) {
+        _dashboard = [LSBDashboardWindowController new];
+        _dashboard.delegate = self;
     }
-    NSURL *url = [NSURL URLWithString:@"ui" relativeToURL:[NSURL URLWithString:[base.absoluteString stringByAppendingString:@"/"]]];
-    if (url) [[NSWorkspace sharedWorkspace] openURL:url];
+    [_dashboard showDashboardWithStore:_store];
 }
 
-- (void)openConfig:(id)sender {
-    NSString *path = LSBSettings.configPath;
-    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
-        NSAlert *alert = [[NSAlert alloc] init];
-        alert.messageText = @"Конфиг LiteLLM не найден";
-        alert.informativeText = [NSString stringWithFormat:@"Файл %@ не существует. Проверьте путь в настройках.", path];
-        [alert addButtonWithTitle:@"OK"];
-        [alert runModal];
-        return;
-    }
-    [[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:path]];
-}
-
-- (void)openProjectFolder:(id)sender {
-    NSString *config = LSBSettings.configPath;
-    NSString *project = [[config stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
-    if (project.length == 0 || ![[NSFileManager defaultManager] fileExistsAtPath:project]) {
-        NSBeep();
-        return;
-    }
-    [[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:project]];
+- (void)openDataFolder:(id)sender {
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:LSBSettings.dataDirectory]];
 }
 
 - (void)openSettings:(id)sender {
+    if (!_settingsWindow) {
+        _settingsWindow = [LSBSettingsWindowController new];
+        _settingsWindow.delegate = self;
+    }
     [_settingsWindow showSettings];
 }
 
@@ -717,7 +718,7 @@
 - (void)selectInterval:(NSMenuItem *)sender {
     NSNumber *value = [sender.representedObject isKindOfClass:[NSNumber class]] ? sender.representedObject : nil;
     if (!value) return;
-    [LSBSettings setRefreshInterval:value.doubleValue];
+    [LSBSettings setScanInterval:value.doubleValue];
     [self scheduleTimer];
     [self rebuildMenu];
 }
@@ -751,6 +752,20 @@
         }
     }
     [self rebuildMenu];
+}
+
+#pragma mark - Dashboard delegate
+
+- (void)dashboardDidRequestScan {
+    [self refreshForced:YES];
+}
+
+- (void)dashboardDidRequestSettings {
+    [self openSettings:nil];
+}
+
+- (void)dashboardDidRequestDataFolder {
+    [self openDataFolder:nil];
 }
 
 #pragma mark - Settings delegate

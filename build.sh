@@ -25,13 +25,20 @@ clang \
   -mmacosx-version-min="${MIN_MACOS}" \
   -framework Cocoa \
   -framework ServiceManagement \
-  -framework Security \
+  -framework WebKit \
+  -lsqlite3 \
   Sources/*.m \
   -o "$APP/Contents/MacOS/LLMSpendBar"
 
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 if [[ -f Resources/AppIcon.icns ]]; then
   cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+fi
+if [[ -f Resources/pricing.json ]]; then
+  cp Resources/pricing.json "$APP/Contents/Resources/pricing.json"
+fi
+if [[ -d Resources/dashboard ]]; then
+  cp -R Resources/dashboard "$APP/Contents/Resources/dashboard"
 fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
@@ -57,8 +64,11 @@ case "${1:-}" in
     echo "==> Установлено: $HOME/Applications/$APP_NAME.app"
     open "$HOME/Applications/$APP_NAME.app"
     ;;
-  --probe)
-    "$APP/Contents/MacOS/LLMSpendBar" --probe
+  --scan)
+    "$APP/Contents/MacOS/LLMSpendBar" --scan
+    ;;
+  --dashboard-json)
+    "$APP/Contents/MacOS/LLMSpendBar" --dashboard-json "${2:-/tmp/llm-spend-dashboard.json}"
     ;;
   --dump-menu)
     "$APP/Contents/MacOS/LLMSpendBar" --dump-menu
@@ -68,6 +78,9 @@ case "${1:-}" in
     ;;
   --settings)
     "$APP/Contents/MacOS/LLMSpendBar" --settings
+    ;;
+  --dashboard)
+    "$APP/Contents/MacOS/LLMSpendBar" --dashboard
     ;;
   --demo-menu)
     LSB_DEMO=1 "$APP/Contents/MacOS/LLMSpendBar" --dump-menu

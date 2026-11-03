@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Spend</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">◧</div>
+        <div>
+          <h1>LLM Spend</h1>
+          <p>локальные логи · без Docker</p>
+        </div>
+      </div>
+      <nav class="periods" id="periods">
+        <button data-period="today">Сегодня</button>
+        <button data-period="week">7 дней</button>
+        <button data-period="month" class="active">Месяц</button>
+        <button data-period="all">Всё</button>
+      </nav>
+      <div class="actions">
+        <button class="icon-button" id="scanBtn" title="Сканировать сейчас">↻</button>
+        <button class="icon-button" id="settingsBtn" title="Настройки">⚙</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="kpis" id="kpis"></section>
+
+      <section class="panel budgets-panel">
+        <div class="panel-head">
+          <h2>Бюджеты</h2>
+          <span class="muted" id="budgetMeta"></span>
+        </div>
+        <div class="budgets" id="budgets"></div>
+      </section>
+
+      <section class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Активность</h2>
+            <span class="muted">токены за последние 30 дней</span>
+          </div>
+          <div class="segmented" id="chartMode">
+            <button data-mode="tool" class="active">по инструментам</button>
+            <button data-mode="model">по моделям</button>
+          </div>
+        </div>
+        <div id="activityChart" class="chart"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Heatmap</h2>
+            <span class="muted">активность за год</span>
+          </div>
+          <span class="muted" id="heatmapMeta"></span>
+        </div>
+        <div id="heatmap" class="heatmap"></div>
+      </section>
+
+      <section class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Разбивка</h2>
+            <div class="segmented" id="breakdownTabs">
+              <button data-tab="tools" class="active">Инструменты</button>
+              <button data-tab="models">Модели</button>
+              <button data-tab="projects">Проекты</button>
+            </div>
+          </div>
+          <div id="breakdown" class="breakdown"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Сессии</h2>
+            <span class="muted" id="sessionsMeta"></span>
+          </div>
+          <div id="sessions" class="sessions"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="unpricedPanel">
+        <div class="panel-head">
+          <h2>Модели без цены</h2>
+          <span class="muted">для них стоимость не посчитана</span>
+        </div>
+        <div id="unpriced" class="unpriced"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal hidden" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>Настройки</h2>
+        <button class="icon-button" id="closeSettings" title="Закрыть">×</button>
+      </div>
+      <div class="form-grid">
+        <label>Бюджет на день, $<input id="dailyBudget" type="number" min="0" step="0.01"></label>
+        <label>Бюджет на неделю, $<input id="weeklyBudget" type="number" min="0" step="0.01"></label>
+        <label>Бюджет на месяц, $<input id="monthlyBudget" type="number" min="0" step="0.01"></label>
+        <label>Сканировать каждые, сек<input id="scanInterval" type="number" min="10" step="5"></label>
+      </div>
+      <p class="modal-note">Пути к логам и цены можно изменить в меню приложения и в <code>pricing.json</code>. Тексты диалогов не читаются и не сохраняются.</p>
+      <div class="modal-actions">
+        <button class="secondary" id="openDataFolder">Открыть папку данных</button>
+        <div class="spacer"></div>
+        <button class="secondary" id="cancelSettings">Отмена</button>
+        <button class="primary" id="saveSettings">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip hidden" id="tooltip"></div>
+  <script src="app.js"></script>
+</body>
+</html>

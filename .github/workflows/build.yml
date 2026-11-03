@@ -30,6 +30,9 @@ jobs:
       - name: Python syntax
         run: python3 -m py_compile bridge/litellm_bridge.py tools/mock_litellm.py tools/mock_provider.py tools/mock_token_monitor_hub.py tools/build-app-icon.py
 
+      - name: Local collector tests
+        run: python3 -m unittest tests.test_local_scan -v
+
       - name: Bridge tests
         run: python3 -m unittest tests.test_bridge -v
 

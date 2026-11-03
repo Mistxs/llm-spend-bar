@@ -91,6 +91,18 @@ static NSDate *LSBParseDate(id value) {
 @implementation LSBModelSpend
 @end
 
+#pragma mark - LSBGroupSpend
+
+@implementation LSBGroupSpend
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _name = @"";
+    }
+    return self;
+}
+@end
+
 #pragma mark - LSBSessionSpend
 
 @implementation LSBSessionSpend
@@ -99,6 +111,7 @@ static NSDate *LSBParseDate(id value) {
     if (self) {
         _models = @[];
         _title = @"";
+        _tool = @"";
         _primaryModel = @"";
         _sessionID = @"";
     }
@@ -121,6 +134,16 @@ static NSDate *LSBParseDate(id value) {
 #pragma mark - LSBSummary
 
 @implementation LSBSummary
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _sessions = @[];
+        _tools = @[];
+        _projects = @[];
+    }
+    return self;
+}
+
 + (instancetype)demoSummary {
     LSBSummary *summary = [LSBSummary new];
     NSDate *now = [NSDate date];
@@ -220,10 +243,48 @@ static NSDate *LSBParseDate(id value) {
     agent.startedAt = [now dateByAddingTimeInterval:-3600];
     agent.lastActivity = [now dateByAddingTimeInterval:-2400];
 
+    LSBGroupSpend *opencodeTool = [LSBGroupSpend new];
+    opencodeTool.name = @"opencode";
+    opencodeTool.spend = 1.84;
+    opencodeTool.tokens = 796000;
+    opencodeTool.requests = 18;
+
+    LSBGroupSpend *claudeTool = [LSBGroupSpend new];
+    claudeTool.name = @"claude";
+    claudeTool.spend = 1.21;
+    claudeTool.tokens = 380000;
+    claudeTool.requests = 12;
+
+    LSBGroupSpend *codexTool = [LSBGroupSpend new];
+    codexTool.name = @"codex";
+    codexTool.spend = 0.37;
+    codexTool.tokens = 125000;
+    codexTool.requests = 8;
+
+    LSBGroupSpend *authProject = [LSBGroupSpend new];
+    authProject.name = @"opencode-go-bar";
+    authProject.spend = 1.42;
+    authProject.tokens = 620000;
+    authProject.requests = 22;
+
+    LSBGroupSpend *callsProject = [LSBGroupSpend new];
+    callsProject.name = @"callscribe";
+    callsProject.spend = 1.08;
+    callsProject.tokens = 480000;
+    callsProject.requests = 11;
+
+    LSBGroupSpend *otherProject = [LSBGroupSpend new];
+    otherProject.name = @"personal";
+    otherProject.spend = 0.92;
+    otherProject.tokens = 201000;
+    otherProject.requests = 5;
+
     summary.today = today;
     summary.week = week;
     summary.month = month;
     summary.sessions = @[opencode, chat, claudeSession, agent];
+    summary.tools = @[opencodeTool, claudeTool, codexTool];
+    summary.projects = @[authProject, callsProject, otherProject];
     summary.generatedAt = now;
     summary.logCount = 38;
     summary.demo = YES;

@@ -9,14 +9,6 @@ extern NSString *const LSBDisplayModeTokens;
 @interface LSBSettings : NSObject
 + (void)registerDefaults;
 
-+ (NSString *)baseURLString;
-+ (void)setBaseURLString:(NSString *)value;
-+ (nullable NSURL *)baseURL;
-
-+ (nullable NSString *)masterKey;
-+ (BOOL)setMasterKey:(nullable NSString *)key error:(NSError * _Nullable * _Nullable)error;
-+ (BOOL)deleteMasterKey;
-
 + (double)dailyBudget;
 + (double)weeklyBudget;
 + (double)monthlyBudget;
@@ -24,17 +16,20 @@ extern NSString *const LSBDisplayModeTokens;
 + (void)setWeeklyBudget:(double)value;
 + (void)setMonthlyBudget:(double)value;
 
-+ (NSTimeInterval)refreshInterval;
-+ (void)setRefreshInterval:(NSTimeInterval)value;
-
 + (NSString *)displayMode;
 + (void)setDisplayMode:(NSString *)value;
 
-+ (NSString *)configPath;
-+ (void)setConfigPath:(NSString *)value;
-
-+ (BOOL)demoMode;
-+ (void)setDemoMode:(BOOL)value;
++ (NSString *)dataDirectory;
++ (NSTimeInterval)scanInterval;
++ (void)setScanInterval:(NSTimeInterval)value;
++ (NSString *)claudeProjectsPath;
++ (void)setClaudeProjectsPath:(NSString *)value;
++ (NSString *)codexSessionsPath;
++ (void)setCodexSessionsPath:(NSString *)value;
++ (NSString *)opencodeDBPath;
++ (void)setOpencodeDBPath:(NSString *)value;
++ (NSString *)pricingOverridePath;
++ (void)setPricingOverridePath:(NSString *)value;
 @end
 
 NS_ASSUME_NONNULL_END
