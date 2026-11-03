@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+# OPTIONAL: это старый LiteLLM-слой для API-трафика. Нативному приложению Docker не нужен.
 cd "$(dirname "$0")/.."
 
 if ! command -v docker >/dev/null 2>&1; then

@@ -1,4 +1,5 @@
-# LiteLLM + Postgres для локального аудита расходов.
+# OPTIONAL legacy layer: LiteLLM + Postgres для API-трафика.
+# Нативному приложению LLM Spend Bar Docker НЕ нужен.
 # Запуск: ./scripts/setup.sh
 services:
   litellm:

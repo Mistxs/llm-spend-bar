@@ -1,4 +1,4 @@
-# Конфиг LiteLLM.
+# OPTIONAL legacy: конфиг LiteLLM. Нативному приложению LLM Spend Bar он не нужен.
 #
 # Модели удобнее добавлять через Admin UI: http://127.0.0.1:4000/ui
 # (Models + Endpoints -> Add Model). Они сохраняются в Postgres.
