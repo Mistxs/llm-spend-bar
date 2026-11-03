@@ -28,7 +28,10 @@ jobs:
           kill "$MOCK_PID"
 
       - name: Python syntax
-        run: python3 -m py_compile tools/mock_litellm.py tools/mock_provider.py tools/build-app-icon.py
+        run: python3 -m py_compile bridge/litellm_bridge.py tools/mock_litellm.py tools/mock_provider.py tools/mock_token_monitor_hub.py tools/build-app-icon.py
+
+      - name: Bridge tests
+        run: python3 -m unittest tests.test_bridge -v
 
       - name: Upload app
         uses: actions/upload-artifact@v4

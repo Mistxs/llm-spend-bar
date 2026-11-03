@@ -34,6 +34,45 @@ LLM Spend  ·  LiteLLM
 - **Локально.** LiteLLM слушает только `127.0.0.1`, данные лежат в локальном Postgres. Приложение не отправляет ничего наружу.
 - **Почти без зависимостей.** Приложение — Objective-C + AppKit, собирается `clang` из Command Line Tools. LiteLLM запускается в Docker.
 
+## Все агенты и подписки
+
+LiteLLM видит только API-трафик. Claude Code, Codex, Cursor, Copilot и ChatGPT-подписки не проходят через прокси. Для них мы добавили **bridge в [Token Monitor](https://github.com/Javis603/token-monitor)** — локальный коллектор 48+ инструментов с дашбордом, лимитами и менюбаром.
+
+```
+Claude Code / Codex / Cursor / Copilot / ...  →  Token Monitor (локальные логи + лимиты)
+OpenAI / Anthropic / OpenRouter / ...          →  LiteLLM (API-прокси + цены + бюджеты)
+                                                        ↓
+                                              bridge → Token Monitor Hub
+```
+
+Bridge нормализует spend logs LiteLLM в формат Token Monitor, поэтому в одном окне видно и API-расходы, и подписки, и локальных агентов. Задачи подписываются через `metadata.spend_logs_metadata` (`project`, `task`, `title`) и попадают в Projects/сессии.
+
+```bash
+cp .bridge.env.example .bridge.env   # вставьте секрет из Token Monitor
+./scripts/bridge.sh --once           # пробный прогон
+./scripts/bridge.sh                  # постоянная синхронизация
+```
+
+Подробная инструкция: [docs/token-monitor.md](docs/token-monitor.md).
+
+### Что выбрать
+
+| Задача | LLM Spend Bar + LiteLLM | Token Monitor | OpenUsage |
+|---|---|---|---|
+| API-прокси и жёсткие бюджеты | ✅ | — | — |
+| Подписки и лимиты провайдеров | — | ✅ 48+ инструментов | ✅ 37 провайдеров |
+| Сессии / проекты / задачи | ✅ для API | ✅ локально | ✅ |
+| Красивый дашборд | менюбар | ✅ heatmap, тренды, K-line | TUI |
+| Менюбар | ✅ | ✅ | — (tmux/statusline) |
+| Мультиустройство | — | ✅ | ✅ Hub |
+| Headless / Grafana | — | экспорт CSV/JSON | ✅ SQLite/JSON/CSV |
+
+**Рекомендуемая связка:** Token Monitor (Host mode) + LiteLLM + bridge. Наш менюбар остаётся быстрым доступом к API-бюджету, Token Monitor — общей аналитикой и подписками.
+
+### LangGraph / LangSmith / Langfuse
+
+LangGraph — оркестратор, а не аудит. Он не видит подписки и чужие агенты. Для трассировки **своих** LangGraph-приложений используйте Langfuse (self-hosted, OpenTelemetry, токены/стоимость) или LangSmith; LiteLLM умеет отправлять туда логи. Для «всех агентов» нужен локальный коллектор вроде Token Monitor/OpenUsage.
+
 ## Архитектура
 
 ```
@@ -232,6 +271,7 @@ UNIVERSAL=1 ./build.sh         # universal: Intel + Apple Silicon
 ./build.sh --demo              # запустить с демо-данными (без LiteLLM)
 ./build.sh --demo-menu         # напечатать демо-меню
 ./build.sh --self-test         # прогнать парсер на tests/fixtures/spend_logs.json
+python3 -m unittest tests.test_bridge -v   # тесты bridge
 ```
 
 Для разработки без Docker есть mock-сервер:
