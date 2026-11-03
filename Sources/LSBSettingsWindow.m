@@ -39,7 +39,7 @@
 
     NSTextField *hint = [NSTextField wrappingLabelWithString:
         @"Приложение читает локальные логи агентов и считает токены/стоимость. "
-        @"Тексты диалогов не читаются. Docker и LiteLLM не нужны."];
+        @"Тексты диалогов не сохраняются. Docker и LiteLLM не нужны."];
     hint.font = [NSFont systemFontOfSize:11];
     hint.textColor = [NSColor secondaryLabelColor];
 
