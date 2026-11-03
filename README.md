@@ -64,7 +64,7 @@ cd llm-spend-bar
 ./build.sh --install        # соберёт и установит приложение
 ```
 
-`setup.sh` напечатает master key. Дальше:
+`setup.sh` напечатает master key. Не удаляйте `.env`: смена `LITELLM_SALT_KEY` делает сохранённые в Postgres ключи провайдеров нечитаемыми. Дальше:
 
 1. Откройте `http://127.0.0.1:4000/ui` (логин `admin`, пароль — master key).
 2. **Models + Endpoints → Add Model**: добавьте нужные модели и ключи провайдеров. Либо положите ключи в `.env` (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ...) и добавьте модели в `litellm/config.yaml`.
@@ -79,6 +79,14 @@ cd llm-spend-bar
 
 ```bash
 ./scripts/test-request.sh gpt-5.1
+```
+
+Управление стеком:
+
+```bash
+./scripts/start.sh    # поднять LiteLLM снова
+./scripts/stop.sh     # остановить (данные сохраняются)
+./scripts/logs.sh     # смотреть логи LiteLLM
 ```
 
 ## Подключение агентов
