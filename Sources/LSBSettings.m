@@ -13,6 +13,7 @@ static NSString *const LSBDefaultsClaudePath = @"claudeProjectsPath";
 static NSString *const LSBDefaultsCodexPath = @"codexSessionsPath";
 static NSString *const LSBDefaultsOpenCodePath = @"opencodeDBPath";
 static NSString *const LSBDefaultsPricingPath = @"pricingOverridePath";
+static NSString *const LSBDefaultsSubscriptionPrefix = @"subscription.";
 
 @implementation LSBSettings
 
@@ -27,6 +28,9 @@ static NSString *const LSBDefaultsPricingPath = @"pricingOverridePath";
         LSBDefaultsCodexPath: [@"~/.codex/sessions" stringByExpandingTildeInPath],
         LSBDefaultsOpenCodePath: [@"~/.local/share/opencode/opencode.db" stringByExpandingTildeInPath],
         LSBDefaultsPricingPath: [@"~/Library/Application Support/LLM Spend Bar/pricing.json" stringByExpandingTildeInPath],
+        @"subscription.opencode": @0.0,
+        @"subscription.claude": @0.0,
+        @"subscription.codex": @0.0,
     };
     [[NSUserDefaults standardUserDefaults] registerDefaults:defaults];
 }
@@ -116,6 +120,18 @@ static NSString *const LSBDefaultsPricingPath = @"pricingOverridePath";
 
 + (void)setPricingOverridePath:(NSString *)value {
     [[NSUserDefaults standardUserDefaults] setObject:value forKey:LSBDefaultsPricingPath];
+}
+
++ (double)subscriptionPriceForTool:(NSString *)tool {
+    if (tool.length == 0) return 0;
+    NSString *key = [LSBDefaultsSubscriptionPrefix stringByAppendingString:tool.lowercaseString];
+    return [[NSUserDefaults standardUserDefaults] doubleForKey:key];
+}
+
++ (void)setSubscriptionPrice:(double)price forTool:(NSString *)tool {
+    if (tool.length == 0) return;
+    NSString *key = [LSBDefaultsSubscriptionPrefix stringByAppendingString:tool.lowercaseString];
+    [[NSUserDefaults standardUserDefaults] setDouble:MAX(0, price) forKey:key];
 }
 
 @end

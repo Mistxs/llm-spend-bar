@@ -30,6 +30,9 @@ extern NSString *const LSBDisplayModeTokens;
 + (void)setOpencodeDBPath:(NSString *)value;
 + (NSString *)pricingOverridePath;
 + (void)setPricingOverridePath:(NSString *)value;
+
++ (double)subscriptionPriceForTool:(NSString *)tool;
++ (void)setSubscriptionPrice:(double)price forTool:(NSString *)tool;
 @end
 
 NS_ASSUME_NONNULL_END

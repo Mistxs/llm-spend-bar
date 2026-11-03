@@ -11,13 +11,16 @@
 @property (nonatomic, strong) NSTextField *codexField;
 @property (nonatomic, strong) NSTextField *opencodeField;
 @property (nonatomic, strong) NSTextField *pricingField;
+@property (nonatomic, strong) NSTextField *opencodeSubscriptionField;
+@property (nonatomic, strong) NSTextField *claudeSubscriptionField;
+@property (nonatomic, strong) NSTextField *codexSubscriptionField;
 @property (nonatomic, strong) NSTextField *statusLabel;
 @end
 
 @implementation LSBSettingsWindowController
 
 - (instancetype)init {
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 680, 560)
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 680, 660)
                                                    styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable)
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
@@ -67,6 +70,9 @@
     self.codexField = [NSTextField textFieldWithString:LSBSettings.codexSessionsPath];
     self.opencodeField = [NSTextField textFieldWithString:LSBSettings.opencodeDBPath];
     self.pricingField = [NSTextField textFieldWithString:LSBSettings.pricingOverridePath];
+    self.opencodeSubscriptionField = [NSTextField textFieldWithString:[NSString stringWithFormat:@"%.2f", [LSBSettings subscriptionPriceForTool:@"opencode"]]];
+    self.claudeSubscriptionField = [NSTextField textFieldWithString:[NSString stringWithFormat:@"%.2f", [LSBSettings subscriptionPriceForTool:@"claude"]]];
+    self.codexSubscriptionField = [NSTextField textFieldWithString:[NSString stringWithFormat:@"%.2f", [LSBSettings subscriptionPriceForTool:@"codex"]]];
 
     NSGridView *grid = [NSGridView gridViewWithViews:@[
         @[[self label:@"Бюджет на день, $"], self.dailyField],
@@ -78,6 +84,9 @@
         @[[self label:@"Codex"], self.codexField],
         @[[self label:@"OpenCode DB"], self.opencodeField],
         @[[self label:@"Свои цены"], self.pricingField],
+        @[[self label:@"OpenCode Go, $/мес"], self.opencodeSubscriptionField],
+        @[[self label:@"Claude, $/мес"], self.claudeSubscriptionField],
+        @[[self label:@"Codex, $/мес"], self.codexSubscriptionField],
     ]];
     grid.rowSpacing = 9;
     grid.columnSpacing = 14;
@@ -151,6 +160,9 @@
     self.codexField.stringValue = LSBSettings.codexSessionsPath;
     self.opencodeField.stringValue = LSBSettings.opencodeDBPath;
     self.pricingField.stringValue = LSBSettings.pricingOverridePath;
+    self.opencodeSubscriptionField.stringValue = [NSString stringWithFormat:@"%.2f", [LSBSettings subscriptionPriceForTool:@"opencode"]];
+    self.claudeSubscriptionField.stringValue = [NSString stringWithFormat:@"%.2f", [LSBSettings subscriptionPriceForTool:@"claude"]];
+    self.codexSubscriptionField.stringValue = [NSString stringWithFormat:@"%.2f", [LSBSettings subscriptionPriceForTool:@"codex"]];
     self.statusLabel.stringValue = @"";
 
     NSTimeInterval interval = LSBSettings.scanInterval;
@@ -209,6 +221,9 @@
     if (codex.length > 0) [LSBSettings setCodexSessionsPath:codex];
     if (opencode.length > 0) [LSBSettings setOpencodeDBPath:opencode];
     if (pricing.length > 0) [LSBSettings setPricingOverridePath:pricing];
+    [LSBSettings setSubscriptionPrice:MAX(0, self.opencodeSubscriptionField.doubleValue) forTool:@"opencode"];
+    [LSBSettings setSubscriptionPrice:MAX(0, self.claudeSubscriptionField.doubleValue) forTool:@"claude"];
+    [LSBSettings setSubscriptionPrice:MAX(0, self.codexSubscriptionField.doubleValue) forTool:@"codex"];
 }
 
 - (void)save:(id)sender {

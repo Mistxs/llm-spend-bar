@@ -140,6 +140,46 @@
     $("#budgetMeta").textContent = today > 0 ? `сегодня ${usd(today)}` : "";
   }
 
+  function subscriptionName(tool) {
+    const names = { opencode: "OpenCode Go", claude: "Claude", codex: "Codex" };
+    return names[tool] || tool;
+  }
+
+  function renderSubscriptions() {
+    const rows = Array.isArray(state.snapshot?.subscriptions) ? state.snapshot.subscriptions : [];
+    if (!rows.length) {
+      $("#subscriptionsPanel").classList.add("hidden");
+      return;
+    }
+    $("#subscriptionsPanel").classList.remove("hidden");
+    const total = rows.reduce((acc, row) => acc + (Number(row.monthSpend) || 0), 0);
+    $("#subscriptionsMeta").textContent = `API-эквивалент за месяц: ${usd(total)}`;
+    $("#subscriptions").innerHTML = rows.map((row) => {
+      const price = Number(row.price) || 0;
+      const spend = Number(row.monthSpend) || 0;
+      const ratio = price > 0 ? spend / price : 0;
+      const cls = ratio >= 1 ? "good" : ratio >= 0.5 ? "" : "warn";
+      const fill = price > 0 ? Math.min(100, ratio * 100) : 0;
+      return `
+        <div class="subscription">
+          <div class="subscription-top">
+            <span class="subscription-name">${esc(subscriptionName(row.tool))}</span>
+            <span class="subscription-price">${price > 0 ? `${usd(price)} / мес` : "цена не задана"}</span>
+          </div>
+          <div class="subscription-values">
+            <span>${usd(spend)} <span class="dim">API-экв.</span></span>
+            <strong>${price > 0 ? pct(ratio) : "—"}</strong>
+          </div>
+          <div class="subscription-bar"><div class="subscription-fill ${cls}" style="width:${fill.toFixed(1)}%"></div></div>
+          <div class="subscription-sub">
+            <span>${tokens(row.tokens)} токенов · ${Number(row.requests) || 0} запросов</span>
+            <span>${price > 0 ? (ratio >= 1 ? "окупилась" : "не окупилась") : "задайте в настройках"}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
   function renderChart() {
     const container = $("#activityChart");
     const data = state.snapshot;
@@ -312,6 +352,7 @@
     $$("#periods button").forEach((button) => button.classList.toggle("active", button.dataset.period === state.period));
     renderKPIs();
     renderBudgets();
+    renderSubscriptions();
     renderChart();
     renderHeatmap();
     renderBreakdown();
@@ -325,6 +366,11 @@
     $("#weeklyBudget").value = Number(budgets.weekly || 0).toFixed(2);
     $("#monthlyBudget").value = Number(budgets.monthly || 0).toFixed(2);
     $("#scanInterval").value = Number(state.snapshot?.scanInterval || 60);
+    const subs = state.snapshot?.subscriptions || [];
+    const byTool = Object.fromEntries(subs.map((row) => [row.tool, row.price]));
+    $("#subscriptionOpencode").value = Number(byTool.opencode || 0);
+    $("#subscriptionClaude").value = Number(byTool.claude || 0);
+    $("#subscriptionCodex").value = Number(byTool.codex || 0);
     $("#settingsModal").classList.remove("hidden");
   }
 
@@ -339,6 +385,11 @@
         weekly: Number($("#weeklyBudget").value) || 0,
         monthly: Number($("#monthlyBudget").value) || 0,
         scanInterval: Number($("#scanInterval").value) || 60,
+        subscriptions: {
+          opencode: Number($("#subscriptionOpencode").value) || 0,
+          claude: Number($("#subscriptionClaude").value) || 0,
+          codex: Number($("#subscriptionCodex").value) || 0,
+        },
       },
     });
     closeSettings();

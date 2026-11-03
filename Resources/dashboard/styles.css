@@ -293,3 +293,40 @@ button.secondary:hover { color: var(--text); }
   .budgets { grid-template-columns: 1fr; }
   .topbar { flex-wrap: wrap; }
 }
+
+.subscriptions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.subscription {
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.03);
+}
+.subscription-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.subscription-name { font-size: 12px; font-weight: 600; }
+.subscription-price { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.subscription-values {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.subscription-values strong { color: var(--text); font-weight: 600; }
+.subscription-bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.subscription-fill { height: 100%; border-radius: 999px; background: var(--blue); }
+.subscription-fill.good { background: var(--green); }
+.subscription-fill.warn { background: var(--orange); }
+.subscription-fill.bad { background: var(--red); }
+.subscription-sub { margin-top: 7px; color: var(--dim); font-size: 10px; display: flex; justify-content: space-between; gap: 8px; }

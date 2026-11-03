@@ -39,6 +39,17 @@
         <div class="budgets" id="budgets"></div>
       </section>
 
+      <section class="panel" id="subscriptionsPanel">
+        <div class="panel-head">
+          <div>
+            <h2>Подписки</h2>
+            <span class="muted">API-эквивалент за месяц к стоимости подписки</span>
+          </div>
+          <span class="muted" id="subscriptionsMeta"></span>
+        </div>
+        <div id="subscriptions" class="subscriptions"></div>
+      </section>
+
       <section class="panel chart-panel">
         <div class="panel-head">
           <div>
@@ -106,6 +117,9 @@
         <label>Бюджет на неделю, $<input id="weeklyBudget" type="number" min="0" step="0.01"></label>
         <label>Бюджет на месяц, $<input id="monthlyBudget" type="number" min="0" step="0.01"></label>
         <label>Сканировать каждые, сек<input id="scanInterval" type="number" min="10" step="5"></label>
+        <label>OpenCode Go, $/мес<input id="subscriptionOpencode" type="number" min="0" step="1"></label>
+        <label>Claude, $/мес<input id="subscriptionClaude" type="number" min="0" step="1"></label>
+        <label>Codex, $/мес<input id="subscriptionCodex" type="number" min="0" step="1"></label>
       </div>
       <p class="modal-note">Пути к логам и цены можно изменить в меню приложения и в <code>pricing.json</code>. Тексты диалогов не сохраняются.</p>
       <div class="modal-actions">

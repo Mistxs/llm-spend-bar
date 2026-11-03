@@ -482,6 +482,20 @@ static void LSBAppendJSONLine(NSFileHandle *handle, NSDictionary *dictionary) {
     NSArray<LSBGroupSpend *> *models = [self groupsBy:@"model" start:start end:now limit:30];
     NSArray<LSBGroupSpend *> *projects = [self groupsBy:@"project" start:start end:now limit:30];
     NSArray<LSBSessionSpend *> *sessions = [self sessionsFrom:start to:now limit:100];
+    NSArray<LSBGroupSpend *> *monthTools = [self groupsBy:@"tool" start:monthStart end:now limit:50];
+
+    NSMutableArray *subscriptions = [NSMutableArray array];
+    for (LSBGroupSpend *group in monthTools) {
+        double price = [LSBSettings subscriptionPriceForTool:group.name];
+        [subscriptions addObject:@{
+            @"tool": group.name,
+            @"price": @(price),
+            @"monthSpend": @(group.spend),
+            @"ratio": price > 0 ? @(group.spend / price) : @0,
+            @"tokens": @(group.tokens),
+            @"requests": @(group.requests),
+        }];
+    }
 
     NSMutableArray *toolsJSON = [NSMutableArray array];
     for (LSBGroupSpend *group in tools) {
@@ -554,6 +568,7 @@ static void LSBAppendJSONLine(NSFileHandle *handle, NSDictionary *dictionary) {
         @"heatmap": [self heatmapFrom:heatmapStart to:now],
         @"tools": toolsJSON,
         @"models": modelsJSON,
+        @"subscriptions": subscriptions,
         @"projects": projectsJSON,
         @"sessions": sessionsJSON,
         @"unpriced": unpriced,

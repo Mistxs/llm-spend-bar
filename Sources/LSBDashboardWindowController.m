@@ -128,6 +128,15 @@
             if (settings[@"weekly"]) [LSBSettings setWeeklyBudget:[settings[@"weekly"] doubleValue]];
             if (settings[@"monthly"]) [LSBSettings setMonthlyBudget:[settings[@"monthly"] doubleValue]];
             if (settings[@"scanInterval"]) [LSBSettings setScanInterval:[settings[@"scanInterval"] doubleValue]];
+            NSDictionary *subscriptions = settings[@"subscriptions"];
+            if ([subscriptions isKindOfClass:[NSDictionary class]]) {
+                for (NSString *tool in @[@"opencode", @"claude", @"codex"]) {
+                    NSNumber *value = subscriptions[tool];
+                    if ([value isKindOfClass:[NSNumber class]]) {
+                        [LSBSettings setSubscriptionPrice:value.doubleValue forTool:tool];
+                    }
+                }
+            }
             [self.delegate dashboardDidRequestScan];
             if (self.store) {
                 self.pendingSnapshot = [self.store dashboardSnapshotForPeriod:self.period now:[NSDate date]];
