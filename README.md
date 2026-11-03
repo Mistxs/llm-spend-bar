@@ -6,6 +6,8 @@
 
 Нативное macOS-приложение для аудита расходов на LLM: читает локальные логи агентов, считает токены и стоимость, показывает бюджеты в строке меню и красивый дашборд. **Без Electron, без Docker, без облака.**
 
+Готовая universal-сборка: [Releases](https://github.com/Mistxs/llm-spend-bar/releases/latest).
+
 ![Дашборд](docs/dashboard.png)
 
 ```
