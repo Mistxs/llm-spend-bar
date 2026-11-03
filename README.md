@@ -1,5 +1,7 @@
 # LLM Spend Bar
 
+[![build](https://github.com/Mistxs/llm-spend-bar/actions/workflows/build.yml/badge.svg)](https://github.com/Mistxs/llm-spend-bar/actions/workflows/build.yml)
+
 <img src="docs/app-icon.png" width="128" alt="Иконка приложения">
 
 Нативное macOS-приложение для аудита расходов на LLM: читает локальные логи агентов, считает токены и стоимость, показывает бюджеты в строке меню и красивый дашборд. **Без Electron, без Docker, без облака.**
@@ -29,7 +31,8 @@ Codex JSONL ─────┘
 Нужны macOS 13+ и Command Line Tools (`xcode-select --install`). Docker не нужен.
 
 ```bash
-git clone <repo> llm-spend-bar
+git clone https://github.com/Mistxs/llm-spend-bar.git
+cd llm-spend-bar
 cd llm-spend-bar
 ./build.sh --install
 ```

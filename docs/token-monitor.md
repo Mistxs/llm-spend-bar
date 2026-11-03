@@ -66,7 +66,7 @@ npm run hub
 Bridge не требует зависимостей — только Python 3.9+ из Command Line Tools.
 
 ```bash
-cd /Users/anatoliy/llm-spend-bar
+cd ~/llm-spend-bar
 export LITELLM_MASTER_KEY="$(grep '^LITELLM_MASTER_KEY=' .env | cut -d= -f2-)"
 export TOKEN_MONITOR_HUB_URL="http://127.0.0.1:17321"
 export TOKEN_MONITOR_SECRET="секрет-из-настроек-Token-Monitor"
