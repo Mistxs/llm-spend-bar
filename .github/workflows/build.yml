@@ -1,0 +1,57 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build universal
+        run: UNIVERSAL=1 ./build.sh
+
+      - name: Self-test parser
+        run: ./build.sh --self-test
+
+      - name: Integration test with mock LiteLLM
+        run: |
+          python3 tools/mock_litellm.py --port 4010 &
+          MOCK_PID=$!
+          sleep 1
+          LSB_BASE_URL=http://127.0.0.1:4010 LSB_MASTER_KEY=sk-test ./build.sh --probe
+          kill "$MOCK_PID"
+
+      - name: Python syntax
+        run: python3 -m py_compile tools/mock_litellm.py tools/mock_provider.py tools/build-app-icon.py
+
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: LLM-Spend-Bar
+          path: build/LLM Spend Bar.app
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build release
+        run: UNIVERSAL=1 APP_VERSION="${GITHUB_REF_NAME#v}" ./build.sh
+
+      - name: Zip
+        run: ditto -c -k --keepParent "build/LLM Spend Bar.app" "LLM-Spend-Bar.zip"
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: LLM-Spend-Bar.zip

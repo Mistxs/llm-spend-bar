@@ -1,0 +1,39 @@
+# LiteLLM + Postgres для локального аудита расходов.
+# Запуск: ./scripts/setup.sh
+services:
+  litellm:
+    image: docker.litellm.ai/berriai/litellm:latest
+    ports:
+      # Только loopback: наружу прокси не смотрит.
+      - "127.0.0.1:${LITELLM_PORT:-4000}:4000"
+    env_file:
+      - .env
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?создайте .env через ./scripts/setup.sh}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?создайте .env через ./scripts/setup.sh}
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD:-litellm}@db:5432/litellm
+      STORE_MODEL_IN_DB: "True"
+      LITELLM_LOG: "INFO"
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-litellm}
+      POSTGRES_DB: litellm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

@@ -1,0 +1,101 @@
+{
+  "data": [
+    {
+      "request_id": "chatcmpl-test-1",
+      "call_type": "acompletion",
+      "api_key": "hash_test",
+      "spend": 0.0125,
+      "total_tokens": 1500,
+      "prompt_tokens": 1200,
+      "completion_tokens": 300,
+      "startTime": "2026-11-03T10:15:00.123456Z",
+      "endTime": "2026-11-03T10:15:04.123456Z",
+      "model": "gpt-5.1",
+      "model_id": "gpt-5.1",
+      "model_group": "gpt-5.1",
+      "custom_llm_provider": "openai",
+      "user": "local",
+      "metadata": {
+        "user_api_key_alias": "dev",
+        "spend_logs_metadata": {
+          "session_id": "ses_opencode_auth",
+          "title": "opencode · auth refactor"
+        }
+      },
+      "cache_hit": "true",
+      "session_id": "ses_opencode_auth",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-test-2",
+      "call_type": "acompletion",
+      "api_key": "hash_test",
+      "spend": 0.0042,
+      "total_tokens": 700,
+      "prompt_tokens": 500,
+      "completion_tokens": 200,
+      "startTime": "2026-11-03T10:20:00Z",
+      "endTime": "2026-11-03T10:20:03Z",
+      "model": "claude-sonnet-4.5",
+      "model_group": "claude-sonnet-4.5",
+      "custom_llm_provider": "anthropic",
+      "metadata": "{\"spend_logs_metadata\":{\"session_id\":\"ses_chatgpt_sql\",\"title\":\"ChatGPT · SQL review\"}}",
+      "session_id": null,
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-test-3",
+      "call_type": "acompletion",
+      "api_key": "hash_test",
+      "spend": 0.008,
+      "total_tokens": 900,
+      "prompt_tokens": 650,
+      "completion_tokens": 250,
+      "startTime": "2026-11-03T09:05:00Z",
+      "endTime": "2026-11-03T09:05:02Z",
+      "model": "gemini-2.5-pro",
+      "model_group": "gemini-2.5-pro",
+      "custom_llm_provider": "google",
+      "metadata": {},
+      "session_id": null,
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-test-4",
+      "call_type": "acompletion",
+      "api_key": "hash_test",
+      "spend": 0.031,
+      "total_tokens": 3200,
+      "prompt_tokens": 2600,
+      "completion_tokens": 600,
+      "startTime": "2026-10-31T18:00:00Z",
+      "endTime": "2026-10-31T18:00:05Z",
+      "model": "gpt-5.1",
+      "model_group": "gpt-5.1",
+      "metadata": {"spend_logs_metadata": {"session_id": "ses_week_1", "title": "weekly review"}},
+      "session_id": "ses_week_1",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-test-5",
+      "call_type": "acompletion",
+      "api_key": "hash_test",
+      "spend": 0.05,
+      "total_tokens": 5000,
+      "prompt_tokens": 4000,
+      "completion_tokens": 1000,
+      "startTime": "2026-10-22T12:00:00Z",
+      "endTime": "2026-10-22T12:00:06Z",
+      "model": "deepseek-chat",
+      "model_group": "deepseek-chat",
+      "metadata": {"spend_logs_metadata": {"session_id": "ses_month_1", "title": "migration"}},
+      "session_id": "ses_month_1",
+      "status": "success"
+    }
+  ],
+  "total": 5,
+  "page": 1,
+  "page_size": 1000,
+  "total_pages": 1,
+  "total_is_capped": false
+}

@@ -1,0 +1,21 @@
+# Конфиг LiteLLM.
+#
+# Модели удобнее добавлять через Admin UI: http://127.0.0.1:4000/ui
+# (Models + Endpoints -> Add Model). Они сохраняются в Postgres.
+#
+# Если нужна воспроизводимая конфигурация или свои цены — раскомментируйте
+# model_list ниже. Цены указываются в долларах за ОДИН токен:
+#   input_cost_per_token: 0.00000125   # $1.25 / 1M
+#   output_cost_per_token: 0.00001     # $10 / 1M
+#   cache_read_input_token_cost: 0.000000125
+#   cache_creation_input_token_cost: 0.0000015625
+
+model_list: []
+
+litellm_settings:
+  # Не падать на параметрах, которые не поддерживает провайдер.
+  drop_params: true
+  # Писать session_id в spend logs (x-litellm-trace-id / x-*-session-id).
+  request_correlation_in_logs: true
+  # Не сохранять тексты сообщений в БД — только токены, стоимость и метаданные.
+  turn_off_message_logging: true
